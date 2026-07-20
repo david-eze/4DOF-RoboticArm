@@ -12,7 +12,7 @@
 | 1× | Shoulder Link | 20×18×100mm | Hollow channel, cradle boss, M3 end holes |
 | 1× | Elbow Link | 18×16×100mm | Hollow channel, M3 end holes |
 | 1× | Gripper Base | 60×20×8mm | Servo horn bore, 4× M3 mounting holes |
-| 1× | Gripper Jaw_Left | 45×10×6mm | Guide slot for parallel jaw motion |
+| 1× | Gripper Jaw Left | 45×10×6mm | Guide slot for parallel jaw motion |
 | 1× | Gripper Jaw Right | 45×10×6mm | Guide slot (mirror of left) |
 | 4× | Servo Mount Bracket | 42×20×8mm | Servo pocket, 4× M3 holes, cable channel |
 | 3× | Bearing Housing | OD30 H9mm | 608ZZ press-fit seat (22mm) + 8mm shaft bore |
