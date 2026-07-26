@@ -31,10 +31,10 @@ Firmware for an Arduino Uno (ATmega328P) driving a 4-DOF robotic arm. It handles
 - 2KB SRAM, 32KB flash, 1KB EEPROM
 
 ### Servos (4x PWM)
-- Base — Pin 3 — rotation in the X-Y plane
-- Shoulder — Pin 5 — vertical elevation
-- Elbow — Pin 6 — reach extension
-- Gripper — Pin 9 — open/close
+- Base: Pin 3, rotation in the X-Y plane
+- Shoulder: Pin 5, vertical elevation
+- Elbow: Pin 6, reach extension
+- Gripper: Pin 9, open/close
 
 ### Link lengths (edit in `Arm.h` to match your build)
 - Shoulder link: 100mm
@@ -63,11 +63,11 @@ IDLE → ACCEL → CONST_VEL → DECEL → IDLE
 ```
 Robotic Arm/
 ├── include/
-│   └── Arm.h        
+│   └── Arm.h          # Class definitions and constants
 ├── src/
-│   ├── Arm.cpp        
-│   └── main.cpp       
-├── platformio.ini     
+│   ├── Arm.cpp        # Kinematics and motion control
+│   └── main.cpp       # Serial parser and main loop
+├── platformio.ini     # PlatformIO configuration
 └── README.md
 ```
 
@@ -110,9 +110,9 @@ Where `L₁` and `L₂` are the shoulder and elbow link lengths, and `(x, y, z)`
 
 The firmware moves each joint through three phases rather than snapping to a target angle:
 
-1. **Acceleration** — `position = 0.5 · a · t²`, easing in from rest. Duration depends on the target velocity and acceleration limits.
-2. **Constant velocity** — `position = position_accel + v · t`, holding peak speed. Skipped on short moves that never reach cruising speed (triangle profile).
-3. **Deceleration** — `position = total_distance - 0.5 · a · (t_total - t)²`, easing out symmetrically with the acceleration phase.
+1. **Acceleration**: `position = 0.5 · a · t²`, easing in from rest. Duration depends on the target velocity and acceleration limits.
+2. **Constant velocity**: `position = position_accel + v · t`, holding peak speed. Skipped on short moves that never reach cruising speed (triangle profile).
+3. **Deceleration**: `position = total_distance - 0.5 · a · (t_total - t)²`, easing out symmetrically with the acceleration phase.
 
 ### Defaults
 - Max velocity: 120°/s (kept conservative)
@@ -200,7 +200,7 @@ A magic number (`0xA55A`) is used to check EEPROM integrity on boot. If it doesn
 - [PlatformIO](https://platformio.org/) for VS Code
 - An Arduino Uno
 - 4x PWM servos
-- An external 5V supply for the servos (recommended — don't rely on the Arduino's onboard regulator)
+- An external 5V supply for the servos (recommended; don't rely on the Arduino's onboard regulator)
 
 ### Build steps
 1. Clone or download the project
@@ -226,31 +226,31 @@ GND      -------->   Servo Ground
 ### Link lengths
 In `include/Arm.h`:
 ```cpp
-#define LINK_SHOULDER 100.0f  
-#define LINK_ELBOW    100.0f  
-#define LINK_HAND     50.0f  
+#define LINK_SHOULDER 100.0f  // shoulder link length (mm)
+#define LINK_ELBOW    100.0f  // elbow link length (mm)
+#define LINK_HAND     50.0f   // hand offset (mm)
 ```
 
 ### Workspace limits
 ```cpp
-#define MIN_REACH     20.0f  
-#define MAX_REACH     180.0f  
-#define MIN_Z         -50.0f  
-#define MAX_Z         200.0f  
+#define MIN_REACH     20.0f   // minimum radial distance (mm)
+#define MAX_REACH     180.0f  // maximum radial distance (mm)
+#define MIN_Z         -50.0f  // minimum height (mm)
+#define MAX_Z         200.0f  // maximum height (mm)
 ```
 
 ### Motion limits
 ```cpp
-#define DEFAULT_MAX_VELOCITY     120.0f  
-#define DEFAULT_MAX_ACCELERATION 300.0f  
+#define DEFAULT_MAX_VELOCITY     120.0f  // deg/s
+#define DEFAULT_MAX_ACCELERATION 300.0f  // deg/s²
 ```
 
 ### Servo pins
 ```cpp
-#define PIN_BASE     3  
-#define PIN_SHOULDER 5   
-#define PIN_ELBOW    6   
-#define PIN_GRIPPER  9   
+#define PIN_BASE     3   // base servo PWM pin
+#define PIN_SHOULDER 5   // shoulder servo PWM pin
+#define PIN_ELBOW    6   // elbow servo PWM pin
+#define PIN_GRIPPER  9   // gripper servo PWM pin
 ```
 
 ## Usage examples
@@ -299,13 +299,13 @@ STATUS                 # Check current state
 - Use `STATUS` to see where the arm currently thinks it is
 
 **Jittery or erratic servos**
-- This is almost always power so use an external supply if you haven't already
+- This is almost always power, so use an external supply if you haven't already
 - Check for loose or noisy signal wires
 - Try lowering max velocity/acceleration
 
 **EEPROM problems**
 - `RESET` clears anything corrupted
-- EEPROM is rated for roughly 100,000 write cycles — don't call `SAVE` in a loop
+- EEPROM is rated for roughly 100,000 write cycles, so don't call `SAVE` in a loop
 - Confirm the magic-number check is passing on boot
 
 **Running low on memory**
@@ -340,7 +340,7 @@ STATUS                 # Check current state
 - Motion profiling reduces mechanical shock, but it isn't a substitute for sane velocity/acceleration limits
 
 **Electrical**
-- Don't power servos from the Arduino's 5V pin — use a separate supply
+- Don't power servos from the Arduino's 5V pin; use a separate supply
 - Tie the grounds together between the Arduino and servo supply
 - Add a fuse or current limiter
 - Check for shorts before powering anything up
@@ -354,10 +354,18 @@ STATUS                 # Check current state
 - Parsing G-code files directly for longer sequences
 - Bluetooth or Wi-Fi control instead of wired serial
 
+## License
+
+Provided as-is, for educational and professional use.
+
 ## Contributing
 
 PRs are welcome. A few asks:
 - Match the existing code style and comments
-- Keep an eye on the memory budget — this is still a 2KB-SRAM part
+- Keep an eye on the memory budget: this is still a 2KB-SRAM part
 - Test changes on real hardware, not just in your head
 - Update the docs if behavior changes
+
+## Version history
+
+- **v1.0**: Initial release: trapezoidal motion profiling, geometric inverse kinematics, EEPROM-based calibration, serial command parser, workspace validation
