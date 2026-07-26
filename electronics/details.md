@@ -38,12 +38,3 @@ To protect the MCU GPIO pins from current spikes and back-EMF, each channel inco
 2. **Capacitor Rating:** Ensure all electrolytic capacitors are rated for **$16\text{V}$ or higher**.
 3. **Power Indicator:** The onboard green LED (`LED1`) signals when the $5\text{V}$ regulated bus is active.
 
----
-
-### 📑 Document Revision History
-
-* **Project:** 4-DOF Robotic Arm
-* **Drawing No:** SK001
-* **Revision:** 1.2
-* **Date:** JUL 2026
-* **Designer:** D. EZE
