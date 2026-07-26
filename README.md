@@ -1,185 +1,158 @@
-# Professional-Grade 4-DOF Robotic Arm Controller
+# 4-DOF Robotic Arm Controller
 
-A highly optimized, production-ready firmware for Arduino Uno (ATmega328P) controlling a 4-DOF robotic arm with advanced motion profiling, inverse kinematics, and robust serial communication.
+Firmware for an Arduino Uno (ATmega328P) driving a 4-DOF robotic arm. It handles motion profiling, inverse kinematics, and serial communication, and is meant to be a solid starting point rather than a toy demo.
 
 ## Features
 
-### Core Engineering Principles
-- **Non-Blocking Architecture**: State-machine design using `millis()` for highly responsive operation
-- **Trapezoidal Motion Profiling**: Smooth acceleration/deceleration curves to prevent mechanical stress
-- **Geometric Inverse Kinematics**: Mathematical solution for 3-DOF positioning (Base/Shoulder/Elbow)
-- **Workspace Validation**: Comprehensive safety constraints to prevent self-collision and overreach
-- **EEPROM Persistence**: Calibration data survives power cycles with validation
-- **Robust Serial Protocol**: Command parsing with error handling and validation
+### Design principles
+- Non-blocking, `millis()`-based state machine instead of `delay()` calls, so the controller stays responsive
+- Trapezoidal velocity profiles for smooth acceleration and deceleration (easier on the servos and gears)
+- Geometric inverse kinematics for the base/shoulder/elbow chain
+- Workspace checks to catch unreachable or unsafe targets before moving
+- EEPROM-based calibration storage that survives power cycles, with basic validation
+- A serial command parser with reasonable error handling
 
-### Motion Control
-- **Trapezoidal Velocity Profiles**: Three-phase motion (acceleration → constant velocity → deceleration)
-- **Configurable Constraints**: Per-joint velocity and acceleration limits
-- **Emergency Stop**: Immediate halt capability for safety
-- **Smooth Gripper Control**: Percentage-based open/close with motion profiling
+### Motion control
+- Three-phase trapezoidal profile: accelerate, cruise, decelerate
+- Per-joint velocity and acceleration limits, configurable
+- An emergency stop that halts motion immediately
+- Gripper control as a 0–100% open/close value, also profiled for smoothness
 
 ### Kinematics
-- **Inverse Kinematics**: Maps XYZ coordinates (mm) to joint angles (degrees)
-- **Forward Kinematics**: Computes end-effector position from joint angles (for debugging)
-- **Geometric Solution**: Law of cosines for efficient computation
-- **Workspace Checking**: Validates reachability before motion
+- Inverse kinematics: XYZ (mm) → joint angles (degrees)
+- Forward kinematics for sanity-checking and debugging
+- Law-of-cosines geometric solution (cheap enough to run on an ATmega328P)
+- Reachability checks before committing to a move
 
-## Hardware Requirements
+## Hardware
 
 ### Microcontroller
-- **Arduino Uno** (ATmega328P)
-- **2KB SRAM**, **32KB Flash**, **1KB EEPROM**
+- Arduino Uno (ATmega328P)
+- 2KB SRAM, 32KB flash, 1KB EEPROM
 
-### Servo Motors (4x PWM)
-- **Base Servo**: Pin 3 - Rotation in X-Y plane
-- **Shoulder Servo**: Pin 5 - Elevation in vertical plane  
-- **Elbow Servo**: Pin 6 - Reach extension
-- **Gripper Servo**: Pin 9 - Open/close actuation
+### Servos (4x PWM)
+- Base — Pin 3 — rotation in the X-Y plane
+- Shoulder — Pin 5 — vertical elevation
+- Elbow — Pin 6 — reach extension
+- Gripper — Pin 9 — open/close
 
-### Mechanical Specifications
-- **Link Lengths** (adjustable in `Arm.h`):
-  - Shoulder link: 100mm (base to shoulder joint)
-  - Elbow link: 100mm (shoulder to elbow joint)
-  - Hand offset: 50mm (elbow to gripper)
+### Link lengths (edit in `Arm.h` to match your build)
+- Shoulder link: 100mm
+- Elbow link: 100mm
+- Hand offset: 50mm
 
 ### Communication
-- **Serial**: 115200 baud rate
-- **Format**: ASCII commands with newline termination
+- Serial at 115200 baud
+- Plain ASCII commands, newline-terminated
 
-## Software Architecture
+## Software architecture
 
-### Memory Optimization (ATmega328P Constraints)
-- **Float vs Double**: Uses 32-bit floats to save flash/SRAM
-- **Fixed-Size Buffers**: Prevents heap fragmentation
-- **Efficient Structures**: Joint structure ~53 bytes × 4 = ~212 bytes total
-- **EEPROM Wear Leveling**: Strategic address usage for longevity
+### Memory constraints (ATmega328P)
+With only 2KB of SRAM there isn't much room to be sloppy:
+- Floats instead of doubles throughout
+- Fixed-size buffers to avoid heap fragmentation
+- Compact joint struct (~53 bytes each, ~212 bytes for all four)
+- EEPROM addresses chosen with wear leveling in mind
 
-### State Machine Design
+### State machine
 ```
 IDLE → ACCEL → CONST_VEL → DECEL → IDLE
 ```
 
-### File Structure
+### Project layout
 ```
 Robotic Arm/
 ├── include/
-│   └── Arm.h          # Class definitions and constants
+│   └── Arm.h        
 ├── src/
-│   ├── Arm.cpp        # Implementation of kinematics and motion control
-│   └── main.cpp       # Serial parser and main loop
-├── platformio.ini     # PlatformIO configuration
-└── README.md          # This file
+│   ├── Arm.cpp        
+│   └── main.cpp       
+├── platformio.ini     
+└── README.md
 ```
 
-## Kinematics Mathematics
+## Kinematics
 
-### Inverse Kinematics Solution
+### Inverse kinematics
 
-The arm uses a geometric approach with the following mathematical derivation:
-
-1. **Base Angle (Azimuth)**:
+1. **Base angle (azimuth)**
    ```
    θ_base = atan2(y, x)
    ```
 
-2. **Radial Projection**:
+2. **Radial projection**
    ```
    r = sqrt(x² + y²)
    ```
 
-3. **Elbow Angle** (Law of Cosines):
+3. **Elbow angle** (law of cosines)
    ```
    cos(θ_elbow) = (r² + z² - L₁² - L₂²) / (2·L₁·L₂)
    θ_elbow = acos(cos(θ_elbow))
    ```
 
-4. **Shoulder Angle**:
+4. **Shoulder angle**
    ```
    k₁ = L₁ + L₂·cos(θ_elbow)
    k₂ = L₂·sin(θ_elbow)
    θ_shoulder = atan2(z, r) - atan2(k₂, k₁)
    ```
 
-Where:
-- `L₁` = LINK_SHOULDER (shoulder link length)
-- `L₂` = LINK_ELBOW (elbow link length)
-- `(x, y, z)` = Target coordinates in millimeters
+Where `L₁` and `L₂` are the shoulder and elbow link lengths, and `(x, y, z)` is the target in millimeters.
 
-### Workspace Constraints
-- **Height**: -50mm to +200mm (Z-axis)
-- **Reach**: 20mm to 180mm radial distance
-- **Maximum Reach**: LINK_SHOULDER + LINK_ELBOW
-- **Minimum Reach**: |LINK_SHOULDER - LINK_ELBOW|
+### Workspace limits
+- Height (Z): -50mm to +200mm
+- Radial reach: 20mm to 180mm
+- Max reach: `LINK_SHOULDER + LINK_ELBOW`
+- Min reach: `|LINK_SHOULDER - LINK_ELBOW|`
 
-## Motion Profiling
+## Motion profiling
 
-### Trapezoidal Velocity Profile
+The firmware moves each joint through three phases rather than snapping to a target angle:
 
-The firmware implements a three-phase motion profile:
+1. **Acceleration** — `position = 0.5 · a · t²`, easing in from rest. Duration depends on the target velocity and acceleration limits.
+2. **Constant velocity** — `position = position_accel + v · t`, holding peak speed. Skipped on short moves that never reach cruising speed (triangle profile).
+3. **Deceleration** — `position = total_distance - 0.5 · a · (t_total - t)²`, easing out symmetrically with the acceleration phase.
 
-1. **Acceleration Phase**:
-   ```
-   position = 0.5 · a · t²
-   ```
-   - Smooth ease-in from rest
-   - Duration depends on target velocity and acceleration limits
+### Defaults
+- Max velocity: 120°/s (kept conservative)
+- Max acceleration: 300°/s²
+- Minimum profile duration: 20ms (just to avoid division by zero on tiny moves)
 
-2. **Constant Velocity Phase**:
-   ```
-   position = position_accel + v · t
-   ```
-   - Maintains peak velocity for efficiency
-   - Skipped for short movements (triangle profile)
+## Serial command protocol
 
-3. **Deceleration Phase**:
-   ```
-   position = total_distance - 0.5 · a · (t_total - t)²
-   ```
-   - Smooth ease-out to target
-   - Mirrors acceleration for symmetry
+Commands are plain ASCII, newline-terminated.
 
-### Default Constraints
-- **Maximum Velocity**: 120°/s (conservative for safety)
-- **Maximum Acceleration**: 300°/s²
-- **Minimum Profile Duration**: 20ms (prevents division by zero)
-
-## Serial Command Protocol
-
-### Command Format
-All commands are ASCII strings terminated by newline (`\n`).
-
-### Available Commands
-
-#### Motion Commands
+### Motion
 ```
 G0 X[x] Y[y] Z[z] F[f]  - Move to XYZ coordinates (mm)
-                         X, Y, Z: Target position (required)
-                         F: Feed rate in mm/s (optional, default 50)
+                         X, Y, Z: target position (required)
+                         F: feed rate in mm/s (optional, defaults to 50)
 ```
 
-**Example**: `G0 X100 Y50 Z120 F75`
+Example: `G0 X100 Y50 Z120 F75`
 
-#### Calibration Commands
+### Calibration
 ```
-HOME                   - Move to calibrated home position
-SAVE                   - Save current position as home to EEPROM
-LOAD                   - Load home position from EEPROM
-RESET                  - Factory reset EEPROM (clears calibration)
-```
-
-#### Control Commands
-```
-STOP                   - Emergency stop (immediate halt)
-GRIP [0-100]          - Set gripper (0=closed, 100=open)
-STATUS                 - Show current joint angles and position
-HELP                   - Display available commands
+HOME                   - Move to the saved home position
+SAVE                   - Save current position as home (writes to EEPROM)
+LOAD                   - Reload home position from EEPROM
+RESET                  - Factory reset (clears saved calibration)
 ```
 
-### Response Format
-- **Success**: `OK <message>`
-- **Error**: `ERR <error description>`
+### Control
+```
+STOP                   - Emergency stop, halts immediately
+GRIP [0-100]           - Set gripper position (0 closed, 100 open)
+STATUS                 - Print current joint angles and position
+HELP                   - List available commands
+```
 
-### Example Session
+### Responses
+- Success: `OK <message>`
+- Error: `ERR <error description>`
+
+### Example session
 ```
 > HELP
 === AVAILABLE COMMANDS ===
@@ -203,9 +176,8 @@ Calibration: VALID
 OK Emergency stop activated
 ```
 
-## EEPROM Memory Management
+## EEPROM layout
 
-### Memory Map
 ```
 Address 0-1:   Base home position (int16_t)
 Address 2-3:   Shoulder home position (int16_t)
@@ -214,33 +186,30 @@ Address 6-7:   Gripper home position (int16_t)
 Address 8-9:   Validation magic number (0xA55A)
 ```
 
-### Calibration Procedure
-1. Manually position arm to desired home position
-2. Send `SAVE` command to store to EEPROM
-3. Home position persists across power cycles
-4. Use `RESET` to clear and return to factory defaults
+### Calibrating
+1. Move the arm by hand (or via serial commands) to the position you want as home.
+2. Send `SAVE`.
+3. That position now persists across power cycles.
+4. `RESET` clears it and falls back to factory defaults.
 
-### Validation
-- Magic number (0xA55A) validates EEPROM integrity
-- Invalid data defaults to factory settings (90° for all joints)
-- Range checking prevents loading corrupted values
+A magic number (`0xA55A`) is used to check EEPROM integrity on boot. If it doesn't match, or the stored values are out of range, the firmware falls back to 90° on all joints instead of trusting corrupted data.
 
-## Installation and Setup
+## Getting set up
 
-### Prerequisites
-- [PlatformIO](https://platformio.org/) extension for VS Code
-- Arduino Uno board
-- 4x PWM servo motors
-- External 5V power supply recommended for servos
+### You'll need
+- [PlatformIO](https://platformio.org/) for VS Code
+- An Arduino Uno
+- 4x PWM servos
+- An external 5V supply for the servos (recommended — don't rely on the Arduino's onboard regulator)
 
-### Build Instructions
-1. Clone or download this project
-2. Open in VS Code with PlatformIO
-3. Connect Arduino Uno via USB
-4. Press PlatformIO "Upload" button
-5. Open Serial Monitor at 115200 baud
+### Build steps
+1. Clone or download the project
+2. Open it in VS Code with PlatformIO installed
+3. Plug in the Arduino Uno over USB
+4. Hit Upload in PlatformIO
+5. Open the serial monitor at 115200 baud
 
-### Hardware Connection
+### Wiring
 ```
 Arduino Uno          Servo Motors
 -----------          ------------
@@ -254,39 +223,39 @@ GND      -------->   Servo Ground
 
 ## Configuration
 
-### Adjusting Link Lengths
-Edit `include/Arm.h`:
+### Link lengths
+In `include/Arm.h`:
 ```cpp
-#define LINK_SHOULDER 100.0f  // Your shoulder link length (mm)
-#define LINK_ELBOW    100.0f  // Your elbow link length (mm)
-#define LINK_HAND     50.0f   // Your hand offset (mm)
+#define LINK_SHOULDER 100.0f  
+#define LINK_ELBOW    100.0f  
+#define LINK_HAND     50.0f  
 ```
 
-### Adjusting Workspace Constraints
+### Workspace limits
 ```cpp
-#define MIN_REACH     20.0f   // Minimum radial distance (mm)
-#define MAX_REACH     180.0f  // Maximum radial distance (mm)
-#define MIN_Z         -50.0f  // Minimum height (mm)
-#define MAX_Z         200.0f  // Maximum height (mm)
+#define MIN_REACH     20.0f  
+#define MAX_REACH     180.0f  
+#define MIN_Z         -50.0f  
+#define MAX_Z         200.0f  
 ```
 
-### Adjusting Motion Constraints
+### Motion limits
 ```cpp
-#define DEFAULT_MAX_VELOCITY     120.0f  // deg/s
-#define DEFAULT_MAX_ACCELERATION 300.0f  // deg/s²
+#define DEFAULT_MAX_VELOCITY     120.0f  
+#define DEFAULT_MAX_ACCELERATION 300.0f  
 ```
 
-### Changing Servo Pins
+### Servo pins
 ```cpp
-#define PIN_BASE     3   // Base servo PWM pin
-#define PIN_SHOULDER 5   // Shoulder servo PWM pin
-#define PIN_ELBOW    6   // Elbow servo PWM pin
-#define PIN_GRIPPER  9   // Gripper servo PWM pin
+#define PIN_BASE     3  
+#define PIN_SHOULDER 5   
+#define PIN_ELBOW    6   
+#define PIN_GRIPPER  9   
 ```
 
-## Usage Examples
+## Usage examples
 
-### Basic Motion Sequence
+### Basic sequence
 ```
 G0 X100 Y0 Z100 F50    # Move to position
 G0 X100 Y50 Z100       # Rotate base
@@ -294,7 +263,7 @@ G0 X100 Y50 Z50        # Lower arm
 HOME                   # Return to home
 ```
 
-### Pick and Place Pattern
+### Pick and place
 ```
 G0 X150 Y0 Z80 F75     # Move above pick location
 G0 X150 Y0 Z30 F30     # Lower to pick
@@ -307,7 +276,7 @@ G0 X50 Y90 Z80 F75     # Lift
 HOME                   # Return home
 ```
 
-### Calibration Workflow
+### Calibration workflow
 ```
 # Manually position arm to desired home
 SAVE                   # Save current position
@@ -318,98 +287,77 @@ STATUS                 # Check current state
 
 ## Troubleshooting
 
-### Arm Not Moving
-- Check servo connections and power supply
-- Verify Serial Monitor is set to 115200 baud
-- Send `STATUS` command to check joint angles
-- Ensure target position is within workspace
+**Arm doesn't move**
+- Check servo wiring and power
+- Confirm the serial monitor is at 115200 baud
+- Send `STATUS` and check the joint angles
+- Make sure the target is actually within the workspace
 
-### "Target Unreachable" Error
-- Verify XYZ coordinates are within workspace
-- Check link length configuration matches your hardware
-- Use `STATUS` to see current position for reference
+**"Target unreachable" errors**
+- Double check your XYZ values against the workspace limits
+- Make sure `LINK_SHOULDER`/`LINK_ELBOW` in `Arm.h` match your actual hardware
+- Use `STATUS` to see where the arm currently thinks it is
 
-### Erratic Servo Behavior
-- Ensure adequate power supply (external 5V recommended)
-- Check for loose connections
-- Verify servo signal wires are not noisy
-- Reduce maximum velocity/acceleration if needed
+**Jittery or erratic servos**
+- This is almost always power so use an external supply if you haven't already
+- Check for loose or noisy signal wires
+- Try lowering max velocity/acceleration
 
-### EEPROM Issues
-- Use `RESET` to clear corrupted calibration
-- Check EEPROM write endurance (100,000 cycles typical)
-- Verify magic number validation is working
+**EEPROM problems**
+- `RESET` clears anything corrupted
+- EEPROM is rated for roughly 100,000 write cycles — don't call `SAVE` in a loop
+- Confirm the magic-number check is passing on boot
 
-### Memory Constraints
-- Monitor SRAM usage if adding features
-- Use `float` instead of `double` for calculations
-- Avoid dynamic memory allocation
-- Keep serial buffers minimal
+**Running low on memory**
+- Stick to `float`, not `double`
+- Avoid `malloc`/`new` or anything that allocates dynamically
+- Keep serial buffers small
 
-## Performance Characteristics
+## Performance notes
 
-### Timing
-- **Loop Frequency**: ~50Hz (20ms cycle time)
-- **Servo Update Rate**: 50Hz
-- **Serial Latency**: <1ms for command processing
+- Main loop runs at roughly 50Hz (20ms cycle)
+- Servo updates also at 50Hz
+- Serial commands are processed in under a millisecond
+- SRAM usage is around 400 bytes for the `Arm` class and buffers combined
+- Compiled firmware is roughly 12KB of flash
+- EEPROM usage is 10 bytes for calibration data
+- Position resolution is limited to about 1° by the servos themselves
+- Expect roughly ±2° repeatability, typical of hobby servo hysteresis
+- Effective workspace coverage is around 90% of the theoretical reach, once you account for singularities near the limits
 
-### Memory Usage
-- **SRAM**: ~400 bytes (Arm class + buffers)
-- **Flash**: ~12KB (compiled firmware)
-- **EEPROM**: 10 bytes (calibration data)
+## Safety notes
 
-### Motion Accuracy
-- **Position Resolution**: 1° (servo limitation)
-- **Repeatability**: ±2° (typical servo hysteresis)
-- **Workspace Coverage**: ~90% of theoretical reach
+**Mechanical**
+- Test new motions slowly before running them at full speed
+- Keep hands and loose clothing away from the linkage while it's powered
+- Use a current-limited supply
+- An external emergency stop button is a good idea if this is going near people
 
-## Safety Considerations
+**Software**
+- Workspace validation should catch most unreachable targets before they cause a stall
+- `STOP` halts motion immediately if something looks wrong
+- EEPROM validation guards against loading garbage calibration data
+- Motion profiling reduces mechanical shock, but it isn't a substitute for sane velocity/acceleration limits
 
-### Mechanical Safety
-- Always test motions at low speeds first
-- Keep hands clear of moving parts
-- Use current-limiting power supply
-- Install emergency stop button if possible
+**Electrical**
+- Don't power servos from the Arduino's 5V pin — use a separate supply
+- Tie the grounds together between the Arduino and servo supply
+- Add a fuse or current limiter
+- Check for shorts before powering anything up
 
-### Software Safety
-- Workspace validation prevents overreach
-- Emergency stop command halts all motion
-- EEPROM validation prevents corrupted calibration
-- Motion profiling reduces mechanical stress
+## Ideas for extending this
 
-### Electrical Safety
-- Use external power supply for servos
-- Common ground between Arduino and servo supply
-- Include fuse or current limiter
-- Check for short circuits before powering
-
-## Future Enhancements
-
-Potential improvements for advanced users:
-- Add trajectory interpolation for curved paths
-- Implement PID control for precise positioning
-- Add encoder feedback for closed-loop control
-- Support for coordinated multi-arm systems
-- G-code file parsing for complex sequences
-- Wireless control via Bluetooth/WiFi
-
-## License
-
-This firmware is provided as-is for educational and professional use.
+- Trajectory interpolation for curved (not just point-to-point) paths
+- PID control for tighter positioning
+- Encoder feedback for closed-loop control instead of open-loop servo commands
+- Coordinating multiple arms
+- Parsing G-code files directly for longer sequences
+- Bluetooth or Wi-Fi control instead of wired serial
 
 ## Contributing
 
-Contributions are welcome! Please ensure:
-- Code follows existing style and documentation
-- Features maintain memory constraints
-- All changes are tested on hardware
-- Documentation is updated accordingly
-
-## Version History
-
-- **v1.0** - Initial professional-grade release
-  - Trapezoidal motion profiling
-  - Geometric inverse kinematics
-  - EEPROM calibration persistence
-  - Robust serial command parser
-  - Comprehensive workspace validation
+PRs are welcome. A few asks:
+- Match the existing code style and comments
+- Keep an eye on the memory budget — this is still a 2KB-SRAM part
+- Test changes on real hardware, not just in your head
+- Update the docs if behavior changes
