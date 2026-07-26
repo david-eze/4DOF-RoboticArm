@@ -63,11 +63,11 @@ IDLE → ACCEL → CONST_VEL → DECEL → IDLE
 ```
 Robotic Arm/
 ├── include/
-│   └── Arm.h          # Class definitions and constants
+│   └── Arm.h          
 ├── src/
-│   ├── Arm.cpp        # Kinematics and motion control
-│   └── main.cpp       # Serial parser and main loop
-├── platformio.ini     # PlatformIO configuration
+│   ├── Arm.cpp        
+│   └── main.cpp      
+├── platformio.ini    
 └── README.md
 ```
 
@@ -134,47 +134,23 @@ Example: `G0 X100 Y50 Z120 F75`
 
 ### Calibration
 ```
-HOME                   - Move to the saved home position
-SAVE                   - Save current position as home (writes to EEPROM)
-LOAD                   - Reload home position from EEPROM
-RESET                  - Factory reset (clears saved calibration)
+HOME                   
+SAVE                   
+LOAD                  
+RESET               
 ```
 
 ### Control
 ```
-STOP                   - Emergency stop, halts immediately
-GRIP [0-100]           - Set gripper position (0 closed, 100 open)
-STATUS                 - Print current joint angles and position
-HELP                   - List available commands
+STOP                  
+GRIP [0-100]           
+STATUS               
+HELP              
 ```
 
 ### Responses
 - Success: `OK <message>`
 - Error: `ERR <error description>`
-
-### Example session
-```
-> HELP
-=== AVAILABLE COMMANDS ===
-G0 X[x] Y[y] Z[z] F[f] - Move to coordinates (mm)
-HOME                   - Move to home position
-SAVE                   - Save current as home
-...
-
-> G0 X100 Y50 Z120 F50
-OK Motion started
-
-> STATUS
-=== ARM STATUS ===
-Joints: B=45.0 S=90.0 E=30.0 G=90.0
-Position: X=100.0 Y=50.0 Z=120.0
-Moving: YES
-Calibration: VALID
-==================
-
-> STOP
-OK Emergency stop activated
-```
 
 ## EEPROM layout
 
@@ -226,63 +202,54 @@ GND      -------->   Servo Ground
 ### Link lengths
 In `include/Arm.h`:
 ```cpp
-#define LINK_SHOULDER 100.0f  // shoulder link length (mm)
-#define LINK_ELBOW    100.0f  // elbow link length (mm)
-#define LINK_HAND     50.0f   // hand offset (mm)
+#define LINK_SHOULDER 100.0f  
+#define LINK_ELBOW    100.0f 
+#define LINK_HAND     50.0f 
 ```
 
 ### Workspace limits
 ```cpp
-#define MIN_REACH     20.0f   // minimum radial distance (mm)
-#define MAX_REACH     180.0f  // maximum radial distance (mm)
-#define MIN_Z         -50.0f  // minimum height (mm)
-#define MAX_Z         200.0f  // maximum height (mm)
+#define MIN_REACH     20.0f 
+#define MAX_REACH     180.0f  
+#define MIN_Z         -50.0f  
+#define MAX_Z         200.0f  
 ```
 
 ### Motion limits
 ```cpp
-#define DEFAULT_MAX_VELOCITY     120.0f  // deg/s
-#define DEFAULT_MAX_ACCELERATION 300.0f  // deg/s²
+#define DEFAULT_MAX_VELOCITY     120.0f  
+#define DEFAULT_MAX_ACCELERATION 300.0f  
 ```
 
 ### Servo pins
 ```cpp
-#define PIN_BASE     3   // base servo PWM pin
-#define PIN_SHOULDER 5   // shoulder servo PWM pin
-#define PIN_ELBOW    6   // elbow servo PWM pin
-#define PIN_GRIPPER  9   // gripper servo PWM pin
+#define PIN_BASE     3  
+#define PIN_SHOULDER 5  
+#define PIN_ELBOW    6 
+#define PIN_GRIPPER  9  
 ```
 
 ## Usage examples
 
 ### Basic sequence
 ```
-G0 X100 Y0 Z100 F50    # Move to position
-G0 X100 Y50 Z100       # Rotate base
-G0 X100 Y50 Z50        # Lower arm
-HOME                   # Return to home
+G0 X100 Y0 Z100 F50    
+G0 X100 Y50 Z100       
+G0 X100 Y50 Z50    
+HOME               
 ```
 
 ### Pick and place
 ```
-G0 X150 Y0 Z80 F75     # Move above pick location
-G0 X150 Y0 Z30 F30     # Lower to pick
-GRIP 0                 # Close gripper
-G0 X150 Y0 Z80 F75     # Lift
-G0 X50 Y90 Z80 F75     # Move above place location
-G0 X50 Y90 Z30 F30     # Lower to place
-GRIP 100               # Open gripper
-G0 X50 Y90 Z80 F75     # Lift
-HOME                   # Return home
-```
-
-### Calibration workflow
-```
-# Manually position arm to desired home
-SAVE                   # Save current position
-# Power cycle arm
-LOAD                   # Verify calibration loaded
-STATUS                 # Check current state
+G0 X150 Y0 Z80 F75     
+G0 X150 Y0 Z30 F30     
+GRIP 0                
+G0 X150 Y0 Z80 F75     
+G0 X50 Y90 Z80 F75     
+G0 X50 Y90 Z30 F30     
+GRIP 100            
+G0 X50 Y90 Z80 F75     
+HOME                 
 ```
 
 ## Troubleshooting
@@ -354,10 +321,6 @@ STATUS                 # Check current state
 - Parsing G-code files directly for longer sequences
 - Bluetooth or Wi-Fi control instead of wired serial
 
-## License
-
-Provided as-is, for educational and professional use.
-
 ## Contributing
 
 PRs are welcome. A few asks:
@@ -365,7 +328,3 @@ PRs are welcome. A few asks:
 - Keep an eye on the memory budget: this is still a 2KB-SRAM part
 - Test changes on real hardware, not just in your head
 - Update the docs if behavior changes
-
-## Version history
-
-- **v1.0**: Initial release: trapezoidal motion profiling, geometric inverse kinematics, EEPROM-based calibration, serial command parser, workspace validation
