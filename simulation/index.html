@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>4-DOF Robotic Arm Controller: 3D Simulation</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #0a0a0f; color: #e0e0e0; overflow: hidden; }
+    #canvas-container { width: 100vw; height: 100vh; display: block; }
+    
+    #hud {
+      position: absolute; top: 20px; left: 20px;
+      background: rgba(10,10,15,0.85); backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;
+      padding: 20px 24px; min-width: 280px;
+      font-size: 13px; line-height: 1.6;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+      pointer-events: none; z-index: 10;
+    }
+    #hud h1 { font-size: 16px; font-weight: 600; color: #fff; margin-bottom: 4px; letter-spacing: 0.3px; }
+    #hud .subtitle { font-size: 11px; color: #888; margin-bottom: 12px; }
+    #hud .row { display: flex; justify-content: space-between; padding: 2px 0; }
+    #hud .label { color: #888; }
+    #hud .value { color: #fff; font-weight: 500; font-variant-numeric: tabular-nums; }
+    #hud .value.green { color: #4ade80; }
+    #hud .value.yellow { color: #facc15; }
+    #hud .value.orange { color: #fb923c; }
+    #hud .value.red { color: #f87171; }
+    #hud .divider { border-top: 1px solid rgba(255,255,255,0.06); margin: 8px 0; }
+    #hud .demo-label { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
+
+    #controls {
+      position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;
+      z-index: 10;
+    }
+    #controls button {
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+      color: #ccc; padding: 10px 20px; border-radius: 8px;
+      font-size: 13px; cursor: pointer; transition: all 0.2s;
+      font-family: inherit; backdrop-filter: blur(8px);
+    }
+    #controls button:hover { background: rgba(255,255,255,0.12); color: #fff; border-color: rgba(255,255,255,0.2); }
+    #controls button.active { background: rgba(74,222,128,0.15); border-color: #4ade80; color: #4ade80; }
+
+    #status-badge {
+      position: absolute; top: 20px; right: 20px;
+      background: rgba(10,10,15,0.85); backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.08); border-radius: 8px;
+      padding: 10px 16px; font-size: 12px;
+      display: flex; align-items: center; gap: 8px; z-index: 10;
+    }
+    #status-badge .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #4ade80; animation: pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+    #profile-chart {
+      position: absolute; bottom: 90px; right: 20px;
+      width: 280px; height: 120px;
+      background: rgba(10,10,15,0.85); backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.08); border-radius: 10px;
+      padding: 12px 16px; z-index: 10;
+    }
+    #profile-chart canvas { width: 100%; height: 100%; display: block; }
+    #profile-chart .chart-label { font-size: 10px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+
+    @media (max-width: 768px) {
+      #hud { top: 10px; left: 10px; min-width: 200px; padding: 14px 16px; font-size: 12px; }
+      #controls { bottom: 16px; gap: 6px; }
+      #controls button { padding: 8px 14px; font-size: 11px; }
+      #profile-chart { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <div id="hud">
+    <h1>4-DOF Robotic Arm Controller</h1>
+    <div class="subtitle">Inverse Kinematics · Trapezoidal Motion Profiling</div>
+    <div class="divider"></div>
+    <div class="row"><span class="label">Base</span><span class="value" id="hud-base">0.0°</span></div>
+    <div class="row"><span class="label">Shoulder</span><span class="value" id="hud-shoulder">0.0°</span></div>
+    <div class="row"><span class="label">Elbow</span><span class="value" id="hud-elbow">0.0°</span></div>
+    <div class="row"><span class="label">Gripper</span><span class="value" id="hud-gripper">0.0°</span></div>
+    <div class="divider"></div>
+    <div class="row"><span class="label">Position</span><span class="value" id="hud-pos">—</span></div>
+    <div class="row"><span class="label">State</span><span class="value green" id="hud-state">IDLE</span></div>
+    <div class="row"><span class="label">Profile Phase</span><span class="value yellow" id="hud-phase">—</span></div>
+    <div class="divider"></div>
+    <div class="demo-label" id="hud-demo">● Interactive Mode</div>
+  </div>
+
+  <div id="status-badge">
+    <span class="dot"></span>
+    <span>Simulation Running · 50 Hz</span>
+  </div>
+
+  <div id="profile-chart">
+    <div class="chart-label">Velocity Profile</div>
+    <canvas id="profileCanvas"></canvas>
+  </div>
+
+  <div id="controls">
+    <button data-demo="interactive" class="active">◉ Interactive</button>
+    <button data-demo="ik-demo">◈ IK Demo</button>
+    <button data-demo="pick-place">⊞ Pick & Place</button>
+    <button data-demo="workspace">◎ Workspace Scan</button>
+    <button data-demo="home">⌂ Home</button>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+  <script>
+  
+  const LINK_SHOULDER = 100;
+  const LINK_ELBOW    = 100;
+  const LINK_HAND     = 50;
+  const MIN_REACH     = 20;
+  const MAX_REACH     = 180;
+  const MIN_Z         = -50;
+  const MAX_Z         = 200;
+  const MAX_VEL       = 120;
+  const MAX_ACC       = 300;
+  const GRIP_OPEN     = 150;
+  const GRIP_CLOSED   = 30;
+
+
+  const container = document.getElementById('canvas-container');
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0a0a0f);
+
+  const camera = new THREE.PerspectiveCamera(40, container.clientWidth / container.clientHeight, 1, 2000);
+  camera.position.set(350, 200, 400);
+  camera.lookAt(0, 80, 0);
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(container.clientWidth, container.clientHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.2;
+  container.appendChild(renderer.domElement);
+
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.target.set(0, 80, 0);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.minDistance = 150;
+  controls.maxDistance = 800;
+  controls.update();
+
+
+  const ambientLight = new THREE.AmbientLight(0x404060, 0.5);
+  scene.add(ambientLight);
+
+  const mainLight = new THREE.DirectionalLight(0xffeedd, 2.5);
+  mainLight.position.set(200, 400, 300);
+  mainLight.castShadow = true;
+  mainLight.shadow.mapSize.width = 2048;
+  mainLight.shadow.mapSize.height = 2048;
+  mainLight.shadow.camera.near = 1;
+  mainLight.shadow.camera.far = 800;
+  mainLight.shadow.camera.left = -300;
+  mainLight.shadow.camera.right = 300;
+  mainLight.shadow.camera.top = 300;
+  mainLight.shadow.camera.bottom = -300;
+  scene.add(mainLight);
+
+  const fillLight = new THREE.DirectionalLight(0x4488ff, 0.6);
+  fillLight.position.set(-200, 100, -200);
+  scene.add(fillLight);
+
+  const rimLight = new THREE.DirectionalLight(0xffffff, 0.4);
+  rimLight.position.set(0, -100, -300);
+  scene.add(rimLight);
+
+  const hemiLight = new THREE.HemisphereLight(0x4488ff, 0x002244, 0.4);
+  scene.add(hemiLight);
+
+  
+  const groundGeo = new THREE.PlaneGeometry(600, 600);
+  const groundMat = new THREE.MeshStandardMaterial({
+    color: 0x111122, roughness: 0.8, metalness: 0.2,
+    transparent: true, opacity: 0.9,
+  });
+  const ground = new THREE.Mesh(groundGeo, groundMat);
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = -2;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  const gridHelper = new THREE.GridHelper(500, 40, 0x222244, 0x222244);
+  gridHelper.position.y = -1;
+  scene.add(gridHelper);
+
+ 
+  const wsGroup = new THREE.Group();
+  scene.add(wsGroup);
+
+  function buildWorkspace() {
+    while(wsGroup.children.length) {
+      const c = wsGroup.children[0];
+      if (c.geometry) c.geometry.dispose();
+      if (c.material) c.material.dispose();
+      wsGroup.remove(c);
+    }
+    const sphereGeo = new THREE.SphereGeometry(MAX_REACH, 32, 24, 0, Math.PI * 2, 0, Math.PI / 2);
+    const sphereMat = new THREE.MeshBasicMaterial({ color: 0x4ade80, wireframe: true, transparent: true, opacity: 0.08 });
+    const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+    sphere.position.y = 0;
+    wsGroup.add(sphere);
+
+    const innerGeo = new THREE.SphereGeometry(MIN_REACH, 24, 18, 0, Math.PI * 2, 0, Math.PI / 2);
+    const innerMat = new THREE.MeshBasicMaterial({ color: 0xf87171, wireframe: true, transparent: true, opacity: 0.06 });
+    const inner = new THREE.Mesh(innerGeo, innerMat);
+    inner.position.y = 0;
+    wsGroup.add(inner);
+
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0x4ade80, transparent: true, opacity: 0.1, side: THREE.DoubleSide });
+    for (const z of [MIN_Z, MAX_Z]) {
+      const ringGeo = new THREE.RingGeometry(MIN_REACH, MAX_REACH, 48);
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = z;
+      wsGroup.add(ring);
+    }
+  }
+  buildWorkspace();
+
+ 
+  const armGroup = new THREE.Group();
+  scene.add(armGroup);
+
+  const matBase = new THREE.MeshStandardMaterial({ color: 0x2a2a4a, roughness: 0.4, metalness: 0.6 });
+  const matLink = new THREE.MeshStandardMaterial({ color: 0x3a3a6a, roughness: 0.3, metalness: 0.7 });
+  const matJoint = new THREE.MeshStandardMaterial({ color: 0x4a4a8a, roughness: 0.3, metalness: 0.8, emissive: 0x222244, emissiveIntensity: 0.2 });
+  const matGripper = new THREE.MeshStandardMaterial({ color: 0x5a5a9a, roughness: 0.3, metalness: 0.7 });
+  const matAccent = new THREE.MeshStandardMaterial({ color: 0x4ade80, roughness: 0.2, metalness: 0.3, emissive: 0x4ade80, emissiveIntensity: 0.1 });
+
+  const basePlat = new THREE.Mesh(new THREE.CylinderGeometry(50, 55, 12, 32), matBase);
+  basePlat.position.y = 6;
+  basePlat.castShadow = true;
+  basePlat.receiveShadow = true;
+  armGroup.add(basePlat);
+
+  const tower = new THREE.Mesh(new THREE.CylinderGeometry(18, 22, 30, 32), matBase);
+  tower.position.y = 27;
+  tower.castShadow = true;
+  armGroup.add(tower);
+
+  const baseJoint = new THREE.Group();
+  baseJoint.position.y = 42;
+  armGroup.add(baseJoint);
+
+  const baseCap = new THREE.Mesh(new THREE.CylinderGeometry(24, 24, 6, 32), matJoint);
+  baseCap.position.y = 3;
+  baseCap.castShadow = true;
+  baseJoint.add(baseCap);
+
+  const shoulderJoint = new THREE.Group();
+  shoulderJoint.position.y = 6;
+  baseJoint.add(shoulderJoint);
+
+  const shoulderLink = new THREE.Group();
+  shoulderLink.position.x = LINK_SHOULDER / 2;
+  shoulderJoint.add(shoulderLink);
+
+  const linkMesh = new THREE.Mesh(new THREE.BoxGeometry(LINK_SHOULDER, 10, 10), matLink);
+  linkMesh.castShadow = true;
+  shoulderLink.add(linkMesh);
+
+  const accentMesh = new THREE.Mesh(new THREE.BoxGeometry(LINK_SHOULDER - 10, 2, 12), matAccent);
+  accentMesh.position.y = 0;
+  shoulderLink.add(accentMesh);
+
+  const shoulderSphere = new THREE.Mesh(new THREE.SphereGeometry(8, 24, 24), matJoint);
+  shoulderSphere.position.x = 0;
+  shoulderJoint.add(shoulderSphere);
+
+  const elbowJoint = new THREE.Group();
+  elbowJoint.position.x = LINK_SHOULDER;
+  shoulderJoint.add(elbowJoint);
+
+  const elbowSphere = new THREE.Mesh(new THREE.SphereGeometry(7, 24, 24), matJoint);
+  elbowJoint.add(elbowSphere);
+
+  const elbowLink = new THREE.Group();
+  elbowLink.position.x = LINK_ELBOW / 2;
+  elbowJoint.add(elbowLink);
+
+  const elMesh = new THREE.Mesh(new THREE.BoxGeometry(LINK_ELBOW, 8, 8), matLink);
+  elMesh.castShadow = true;
+  elbowLink.add(elMesh);
+
+  const elAccent = new THREE.Mesh(new THREE.BoxGeometry(LINK_ELBOW - 10, 1.5, 10), matAccent);
+  elAccent.position.y = 0;
+  elbowLink.add(elAccent);
+
+  const wristJoint = new THREE.Group();
+  wristJoint.position.x = LINK_ELBOW;
+  elbowJoint.add(wristJoint);
+
+  const wristSphere = new THREE.Mesh(new THREE.SphereGeometry(6, 20, 20), matJoint);
+  wristJoint.add(wristSphere);
+
+  const gripperGroup = new THREE.Group();
+  gripperGroup.position.x = LINK_HAND;
+  wristJoint.add(gripperGroup);
+
+  const gripBase = new THREE.Mesh(new THREE.BoxGeometry(16, 6, 20), matGripper);
+  gripBase.position.x = 0;
+  gripBase.castShadow = true;
+  gripperGroup.add(gripBase);
+
+  const jawLeft = new THREE.Group();
+  gripperGroup.add(jawLeft);
+  const jawL = new THREE.Mesh(new THREE.BoxGeometry(4, 6, 14), matGripper);
+  jawL.position.set(0, -3, 0);
+  jawL.castShadow = true;
+  jawLeft.add(jawL);
+  const jawLTip = new THREE.Mesh(new THREE.BoxGeometry(4, 4, 4), matAccent);
+  jawLTip.position.set(0, -6, 0);
+  jawLeft.add(jawLTip);
+
+  const jawRight = new THREE.Group();
+  gripperGroup.add(jawRight);
+  const jawR = new THREE.Mesh(new THREE.BoxGeometry(4, 6, 14), matGripper);
+  jawR.position.set(0, -3, 0);
+  jawR.castShadow = true;
+  jawRight.add(jawR);
+  const jawRTip = new THREE.Mesh(new THREE.BoxGeometry(4, 4, 4), matAccent);
+  jawRTip.position.set(0, -6, 0);
+  jawRight.add(jawRTip);
+
+ 
+  const targetGroup = new THREE.Group();
+  scene.add(targetGroup);
+
+  const targMat = new THREE.MeshBasicMaterial({ color: 0xf87171, transparent: true, opacity: 0.6 });
+  const targSphere = new THREE.Mesh(new THREE.SphereGeometry(4, 16, 16), targMat);
+  targetGroup.add(targSphere);
+
+  const targRing = new THREE.Mesh(new THREE.RingGeometry(6, 10, 32),
+    new THREE.MeshBasicMaterial({ color: 0xf87171, transparent: true, opacity: 0.3, side: THREE.DoubleSide }));
+  targRing.rotation.x = -Math.PI / 2;
+  targetGroup.add(targRing);
+
+  const targLineMat = new THREE.LineBasicMaterial({ color: 0xf87171, transparent: true, opacity: 0.2 });
+  for (let i = 0; i < 3; i++) {
+    const pts = [new THREE.Vector3(0, -20, 0), new THREE.Vector3(0, 20, 0)];
+    const geo = new THREE.BufferGeometry().setFromPoints(pts);
+    const line = new THREE.Line(geo, targLineMat);
+    line.rotation.y = (i / 3) * Math.PI * 2;
+    targetGroup.add(line);
+  }
+
+  
+  const trailMat = new THREE.LineBasicMaterial({ color: 0x4ade80, transparent: true, opacity: 0.3 });
+  const trailGeo = new THREE.BufferGeometry();
+  const trailLine = new THREE.Line(trailGeo, trailMat);
+  scene.add(trailLine);
+
+
+  const armState = {
+    baseDeg: 90, shoulderDeg: 90, elbowDeg: 90, gripperDeg: 90,
+    targetBase: 90, targetShoulder: 90, targetElbow: 90, targetGripper: 90,
+    moving: false, phase: 'IDLE',
+    profileStart: 0, profileDuration: 0,
+    startBase: 90, startShoulder: 90, startElbow: 90, startGripper: 90,
+    peakVel: 0, accelTime: 0, decelTime: 0,
+    currentX: 0, currentY: 0, currentZ: 0,
+    targetX: 0, targetY: 0, targetZ: 0,
+    trail: [],
+  };
+
+ 
+  function inverseKinematics(x, y, z) {
+    const r = Math.sqrt(x * x + y * y);
+    const targetDist = Math.sqrt(r * r + z * z);
+    const maxReach = LINK_SHOULDER + LINK_ELBOW;
+    const minReach = Math.abs(LINK_SHOULDER - LINK_ELBOW);
+    if (targetDist > maxReach || targetDist < minReach) return null;
+    if (z < MIN_Z || z > MAX_Z) return null;
+    if (r < MIN_REACH || r > MAX_REACH) return null;
+
+    const baseRad = Math.atan2(y, x);
+    const cosElbow = (r * r + z * z - LINK_SHOULDER * LINK_SHOULDER - LINK_ELBOW * LINK_ELBOW) /
+                     (2 * LINK_SHOULDER * LINK_ELBOW);
+    const clamped = Math.max(-1, Math.min(1, cosElbow));
+    const elbowRad = Math.acos(clamped);
+    const k1 = LINK_SHOULDER + LINK_ELBOW * Math.cos(elbowRad);
+    const k2 = LINK_ELBOW * Math.sin(elbowRad);
+    const shoulderRad = Math.atan2(z, r) - Math.atan2(k2, k1);
+
+    return {
+      base: baseRad * 180 / Math.PI,
+      shoulder: shoulderRad * 180 / Math.PI,
+      elbow: elbowRad * 180 / Math.PI,
+    };
+  }
+
+  function forwardKinematics(baseDeg, shoulderDeg, elbowDeg) {
+    const baseRad = baseDeg * Math.PI / 180;
+    const shoulderRad = shoulderDeg * Math.PI / 180;
+    const elbowRad = elbowDeg * Math.PI / 180;
+    const total = shoulderRad + elbowRad;
+    const rArm = LINK_SHOULDER * Math.cos(shoulderRad) + LINK_ELBOW * Math.cos(total);
+    const zArm = LINK_SHOULDER * Math.sin(shoulderRad) + LINK_ELBOW * Math.sin(total);
+    return { x: rArm * Math.cos(baseRad), y: rArm * Math.sin(baseRad), z: zArm };
+  }
+
+  
+  function startProfile(targetBase, targetShoulder, targetElbow, targetGripper, feedRate) {
+    if (feedRate === undefined) feedRate = 60;
+    const now = performance.now();
+    armState.startBase = armState.baseDeg;
+    armState.startShoulder = armState.shoulderDeg;
+    armState.startElbow = armState.elbowDeg;
+    armState.startGripper = armState.gripperDeg;
+    armState.targetBase = targetBase;
+    armState.targetShoulder = targetShoulder;
+    armState.targetElbow = targetElbow;
+    armState.targetGripper = targetGripper;
+    armState.profileStart = now;
+    armState.moving = true;
+    armState.phase = 'ACCEL';
+
+    const deltas = [
+      Math.abs(targetBase - armState.baseDeg),
+      Math.abs(targetShoulder - armState.shoulderDeg),
+      Math.abs(targetElbow - armState.elbowDeg),
+      Math.abs(targetGripper - armState.gripperDeg),
+    ];
+    const maxDelta = Math.max(...deltas);
+    const vel = Math.min(feedRate, MAX_VEL);
+    const accelTime = vel / MAX_ACC;
+    const accelDist = 0.5 * MAX_ACC * accelTime * accelTime;
+    let peakVel, totalDuration;
+
+    if (2 * accelDist > maxDelta) {
+      const t = Math.sqrt(maxDelta / MAX_ACC);
+      armState.accelTime = t;
+      armState.decelTime = t;
+      peakVel = MAX_ACC * t;
+      totalDuration = 2 * t;
+    } else {
+      armState.accelTime = accelTime;
+      armState.decelTime = accelTime;
+      peakVel = vel;
+      const constTime = (maxDelta - 2 * accelDist) / vel;
+      totalDuration = accelTime + constTime + accelTime;
+    }
+    armState.peakVel = peakVel;
+    armState.profileDuration = Math.max(totalDuration * 1000, 20);
+  }
+
+  function updateProfile() {
+    if (!armState.moving) return;
+    const now = performance.now();
+    const elapsed = now - armState.profileStart;
+    const t = elapsed / armState.profileDuration;
+
+    if (t >= 1) {
+      armState.baseDeg = armState.targetBase;
+      armState.shoulderDeg = armState.targetShoulder;
+      armState.elbowDeg = armState.targetElbow;
+      armState.gripperDeg = armState.targetGripper;
+      armState.moving = false;
+      armState.phase = 'IDLE';
+      return;
+    }
+
+    const accelFrac = armState.accelTime / (armState.profileDuration / 1000);
+    const decelFrac = armState.decelTime / (armState.profileDuration / 1000);
+    let s;
+    if (t < accelFrac) {
+      armState.phase = 'ACCEL';
+      s = 0.5 * (t / accelFrac) * (t / accelFrac);
+    } else if (t < 1 - decelFrac) {
+      armState.phase = 'CONST_VEL';
+      const constT = (t - accelFrac) / (1 - accelFrac - decelFrac);
+      s = accelFrac / 2 + constT * (1 - accelFrac / 2 - decelFrac / 2);
+    } else {
+      armState.phase = 'DECEL';
+      const decelT = (t - (1 - decelFrac)) / decelFrac;
+      s = 1 - 0.5 * (1 - decelT) * (1 - decelT);
+    }
+    armState.baseDeg = armState.startBase + (armState.targetBase - armState.startBase) * s;
+    armState.shoulderDeg = armState.startShoulder + (armState.targetShoulder - armState.startShoulder) * s;
+    armState.elbowDeg = armState.startElbow + (armState.targetElbow - armState.startElbow) * s;
+    armState.gripperDeg = armState.startGripper + (armState.targetGripper - armState.startGripper) * s;
+  }
+
+
+  function updateArmVisual() {
+    baseJoint.rotation.y = (armState.baseDeg - 90) * Math.PI / 180;
+    shoulderJoint.rotation.x = -(armState.shoulderDeg - 90) * Math.PI / 180;
+    elbowJoint.rotation.x = (180 - armState.elbowDeg - (armState.shoulderDeg - 90)) * Math.PI / 180;
+
+    const jawOpen = (armState.gripperDeg - 30) / 120;
+    const jawSpread = 6 + jawOpen * 10;
+    jawLeft.position.z = -jawSpread;
+    jawRight.position.z = jawSpread;
+
+    const fk = forwardKinematics(armState.baseDeg, armState.shoulderDeg, armState.elbowDeg);
+    armState.currentX = fk.x;
+    armState.currentY = fk.y;
+    armState.currentZ = fk.z;
+
+    armState.trail.push(new THREE.Vector3(fk.x, fk.z, fk.y));
+    if (armState.trail.length > 200) armState.trail.shift();
+    if (armState.trail.length > 2) {
+      const pts = armState.trail;
+      const geo = new THREE.BufferGeometry().setFromPoints(pts);
+      trailLine.geometry.dispose();
+      trailLine.geometry = geo;
+    }
+  }
+
+ 
+  function updateHUD() {
+    document.getElementById('hud-base').textContent = armState.baseDeg.toFixed(1) + '°';
+    document.getElementById('hud-shoulder').textContent = armState.shoulderDeg.toFixed(1) + '°';
+    document.getElementById('hud-elbow').textContent = armState.elbowDeg.toFixed(1) + '°';
+    document.getElementById('hud-gripper').textContent = armState.gripperDeg.toFixed(1) + '°';
+    document.getElementById('hud-pos').textContent =
+      'X ' + armState.currentX.toFixed(0) + '  Y ' + armState.currentY.toFixed(0) + '  Z ' + armState.currentZ.toFixed(0);
+
+    const stateEl = document.getElementById('hud-state');
+    stateEl.textContent = armState.moving ? 'MOVING' : 'IDLE';
+    stateEl.className = 'value ' + (armState.moving ? 'green' : 'yellow');
+
+    const phaseEl = document.getElementById('hud-phase');
+    phaseEl.textContent = armState.phase;
+    phaseEl.className = 'value ' + (
+      armState.phase === 'ACCEL' ? 'orange' :
+      armState.phase === 'CONST_VEL' ? 'green' :
+      armState.phase === 'DECEL' ? 'yellow' : 'yellow'
+    );
+  }
+
+  
+  const profileCanvas = document.getElementById('profileCanvas');
+  const ctx = profileCanvas.getContext('2d');
+  profileCanvas.width = 248;
+  profileCanvas.height = 80;
+  const profileHistory = [];
+
+  function updateProfileChart() {
+    let vel = 0;
+    if (armState.moving) {
+      const now = performance.now();
+      const elapsed = now - armState.profileStart;
+      if (armState.phase === 'ACCEL') {
+        vel = armState.peakVel * Math.min(1, elapsed / (armState.accelTime * 1000));
+      } else if (armState.phase === 'DECEL') {
+        vel = armState.peakVel * Math.max(0, 1 - (elapsed - (armState.profileDuration - armState.decelTime * 1000)) / (armState.decelTime * 1000));
+      } else {
+        vel = armState.peakVel;
+      }
+    }
+    profileHistory.push(vel);
+    if (profileHistory.length > 80) profileHistory.shift();
+
+    ctx.clearRect(0, 0, 248, 80);
+    ctx.strokeStyle = '#4ade80';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    const maxV = Math.max(MAX_VEL, ...profileHistory);
+    profileHistory.forEach(function(v, i) {
+      const x = (i / 80) * 248;
+      const y = 80 - (v / maxV) * 70;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    ctx.lineTo(248, 80);
+    ctx.lineTo(0, 80);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(74,222,128,0.08)';
+    ctx.fill();
+  }
+
+  
+  let currentDemo = 'interactive';
+  let demoStep = 0;
+  let demoTimer = 0;
+  let demoPoints = [];
+
+  function runDemo(demoId) {
+    currentDemo = demoId;
+    demoStep = 0;
+    demoTimer = 0;
+    armState.trail = [];
+
+    const demoLabel = document.getElementById('hud-demo');
+
+    switch (demoId) {
+      case 'interactive':
+        demoLabel.textContent = '● Interactive Mode: Click & drag to orbit · Scroll to zoom';
+        demoPoints = [];
+        break;
+      case 'ik-demo':
+        demoLabel.textContent = '◈ IK Demo: Tracing a figure-8 trajectory';
+        demoPoints = [];
+        for (let i = 0; i < 60; i++) {
+          const t = (i / 60) * Math.PI * 2;
+          const r = 100;
+          const x = r * Math.sin(t);
+          const y = r * Math.sin(t) * Math.cos(t) * 0.7;
+          const z = 80 + 40 * Math.sin(t * 2);
+          demoPoints.push({ x: x, y: y + 60, z: z });
+        }
+        scheduleNextDemo();
+        break;
+      case 'pick-place':
+        demoLabel.textContent = '⊞ Pick & Place: Automated pick-and-place cycle';
+        demoPoints = [
+          { x: 140, y: 0, z: 100 },
+          { x: 140, y: 0, z: 35 },
+          { x: 140, y: 0, z: 100 },
+          { x: -60, y: 100, z: 100 },
+          { x: -60, y: 100, z: 35 },
+          { x: -60, y: 100, z: 100 },
+          { x: 0, y: 0, z: 100 },
+        ];
+        scheduleNextDemo();
+        break;
+      case 'workspace':
+        demoLabel.textContent = '◎ Workspace Scan: Exploring reachable volume';
+        demoPoints = [];
+        for (let i = 0; i < 80; i++) {
+          const t = (i / 80) * Math.PI * 2;
+          const r = 60 + 50 * Math.sin(t * 3) * Math.sin(t * 3);
+          const x = r * Math.cos(t);
+          const y = r * Math.sin(t);
+          const z = 40 + 60 * Math.sin(t * 2) * Math.sin(t * 2);
+          demoPoints.push({ x: x, y: y, z: z });
+        }
+        scheduleNextDemo();
+        break;
+      case 'home':
+        demoLabel.textContent = '⌂ Returning to home position';
+        demoPoints = [{ x: 0, y: 0, z: 100 }];
+        scheduleNextDemo();
+        break;
+    }
+  }
+
+  function scheduleNextDemo() {
+    if (demoPoints.length === 0) return;
+    const pt = demoPoints[demoStep % demoPoints.length];
+    const ik = inverseKinematics(pt.x, pt.y, pt.z);
+    if (ik) {
+      const grip = currentDemo === 'pick-place' ?
+        (demoStep % 2 === 1 ? GRIP_CLOSED : GRIP_OPEN) : armState.gripperDeg;
+      startProfile(ik.base, ik.shoulder, ik.elbow, grip, 80);
+      armState.targetX = pt.x;
+      armState.targetY = pt.y;
+      armState.targetZ = pt.z;
+      targetGroup.position.set(pt.x, pt.z, pt.y);
+    }
+    demoStep++;
+  }
+
+ 
+  document.querySelectorAll('#controls button').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('#controls button').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      runDemo(btn.dataset.demo);
+    });
+  });
+
+  let lastTime = 0;
+
+  function animate(time) {
+    requestAnimationFrame(animate);
+    const dt = time - lastTime;
+    lastTime = time;
+
+    updateProfile();
+
+    if (currentDemo !== 'interactive' && demoPoints.length > 0) {
+      demoTimer += dt;
+      if (!armState.moving && demoTimer > 500) {
+        demoTimer = 0;
+        scheduleNextDemo();
+      }
+    }
+
+    updateArmVisual();
+    updateHUD();
+    updateProfileChart();
+    controls.update();
+    renderer.render(scene, camera);
+  }
+
+  
+  window.addEventListener('resize', function() {
+    const w = container.clientWidth;
+    const h = container.clientHeight;
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+  });
+
+  
+  const initIK = inverseKinematics(0, 0, 100);
+  if (initIK) {
+    armState.baseDeg = initIK.base;
+    armState.shoulderDeg = initIK.shoulder;
+    armState.elbowDeg = initIK.elbow;
+    armState.gripperDeg = 90;
+    armState.targetBase = initIK.base;
+    armState.targetShoulder = initIK.shoulder;
+    armState.targetElbow = initIK.elbow;
+    armState.targetGripper = 90;
+    updateArmVisual();
+  }
+
+  animate(0);
+  console.log('4-DOF Robotic Arm Controller Simulation loaded');
+  </script>
+</body>
+</html>
