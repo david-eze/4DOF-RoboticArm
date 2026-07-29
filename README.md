@@ -1,6 +1,8 @@
 # 4-DOF Robotic Arm Controller
 
-Firmware for an Arduino Uno (ATmega328P) driving a 4-DOF robotic arm. It handles motion profiling, inverse kinematics, and serial communication, and is meant to be a solid starting point rather than a toy demo.
+![IK Demo](./simulation/ik-demo.gif)
+
+**Firmware for an Arduino Uno (ATmega328P) driving a 4-DOF robotic arm. It handles motion profiling, inverse kinematics, and serial communication, and is meant to be a solid starting point rather than a toy demo.**
 
 ## Features
 
