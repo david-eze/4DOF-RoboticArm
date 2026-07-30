@@ -1,10 +1,10 @@
-### 📸 Assembly Views
+### Assembly Views
 
 - **ISO Right**: Base platform with servo tower, arm links extending horizontally, cable clips along links
 - **Front**: Base platform with bearing bore, Arduino mount plate, arm chain
 - **ISO Left**: Full arm reach with shoulder + elbow links, bearing housings, gripper components
 
-### 🔩 Parts Created (10 Unique Components)
+### Parts Created (10 Unique Components)
 
 | Qty | Part Name | Dimensions | Key Features |
 | --- | --- | --- | --- |
@@ -19,7 +19,7 @@
 | 1× | Arduino Mount Plate | 75×55×3mm | Uno PCB holes + 4× M3 standoffs |
 | 6× | Cable Clip | OD14mm | 300° C-section snap clip |
 
-### 🛒 Hardware BOM
+### Hardware BOM
 
 | Qty | Item | Notes |
 | --- | --- | --- |
@@ -28,7 +28,7 @@
 | 28× | M3 bolt (6/10/16/20mm) | Various lengths |
 | 28× | M3 nut | Captive where possible |
 
-### 🖨️ Print Settings
+### Print Settings
 
 | Parameter | Value |
 | --- | --- |
@@ -37,7 +37,7 @@
 | Wall loops | 4 (~3mm wall thickness) |
 | Infill | 40% gyroid |
 
-### ⚙️ Assembly Notes
+### Assembly Notes
 
 - **Base Joint (DOF 1)**: 608ZZ bearing presses into Bearing_Housing → mounts in tower bore; servo horn drives rotation (pin 3)
 - **Shoulder Joint (DOF 2)**: Shoulder link pivots on bearing at tower crown; servo in base Servo_Mount_Bracket (pin 5)
