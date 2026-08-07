@@ -393,45 +393,20 @@ Building this arm taught me a lot more than I expected. I went into it thinking 
 
 ### The 2 KB constraint changes how you think
 
-The ATmega328P only has 2 KB of SRAM, which sounds tiny because it is. You can't just use `String` objects everywhere, allocate memory whenever you need it, or ignore how much space your variables and buffers are taking up.
-
-I had to become much more conscious of what the code was actually doing in memory. Every `float`, buffer and function call mattered. I started using smaller integer types where they made sense and even checked stack usage by placing known values in memory and seeing where they got overwritten.
-
-It forced me to think about programming at a much lower level than I normally would. Instead of assuming the hardware would cope, I had to understand exactly what I was asking it to do. That's probably one of the most useful things this project taught me.
+The ATmega328P only has 2 KB of SRAM, which sounds tiny because it is. You can't just use `String` objects everywhere, allocate memory whenever you need it, or ignore how much space your variables and buffers are taking up. I had to become much more conscious of what the code was actually doing in memory. Every `float`, buffer and function call mattered. I started using smaller integer types where they made sense and even checked stack usage by placing known values in memory and seeing where they got overwritten. It forced me to think about programming at a much lower level than I normally would. Instead of assuming the hardware would cope, I had to understand exactly what I was asking it to do.
 
 ### Inverse kinematics isn't just an academic exercise
 
-Before working on this project, it was easy to see inverse kinematics as something complicated that could be solved by using a library or copying a standard algorithm.
-
-For this arm, though, a geometric solution made much more sense. Because it's a 4-DOF arm running on an Arduino Uno, I could solve the kinematics using the geometry of the arm and the law of cosines without needing a large library or dynamic memory.
-
-Actually deriving the equations myself made a huge difference. I had to work through the triangles, project the target position onto the arm's working plane and think carefully about what each angle actually represented.
-
-I even spent an evening trying to figure out why the arm was pointing in completely the wrong direction, only to realise that I'd mixed up the shoulder and elbow angles. It was a frustrating bug at the time, but honestly, I learned more from fixing it than I would have from simply reading the equations in a textbook.
+Before working on this project, it was easy to see inverse kinematics as something complicated that could be solved by using a library or copying a standard algorithm. For this arm, though, a geometric solution made much more sense. Because it's a 4-DOF arm running on an Arduino Uno, I could solve the kinematics using the geometry of the arm and the law of cosines without needing a large library or dynamic memory.
+Actually deriving the equations myself made a huge difference. I had to work through the triangles, project the target position onto the arm's working plane and think carefully about what each angle actually represented. I even spent an evening trying to figure out why the arm was pointing in completely the wrong direction, only to realise that I'd mixed up the shoulder and elbow angles. It was a frustrating bug at the time, but I learned more from fixing it than I would have from simply reading the equations in a textbook.
 
 ### Motion profiling made the arm feel completely different
 
-The first version of the arm could move to the right angles, but that didn't mean it moved well.
-
-The servos would start and stop abruptly, the arm would overshoot, and the whole thing looked and sounded much rougher than I wanted. Initially, I assumed that sending a target angle to the servo would be enough. It wasn't.
-
-Adding a trapezoidal velocity profile made a huge difference. Instead of instantly jumping towards the target, the arm could accelerate, move at a controlled speed, and then decelerate before reaching the target.
-
-I also had to account for shorter movements where the arm doesn't have enough distance to reach its maximum velocity. That's where the triangular profile comes in.
-
-That was one of the biggest lessons from the project: getting to the right position is only part of motion control. In robotics, the way something moves can be just as important as where it ends up.
+The first version of the arm could move to the right angles, but that didn't mean it moved well. The servos would start and stop abruptly, the arm would overshoot, and the whole thing looked and sounded much rougher than I wanted. Initially, I assumed that sending a target angle to the servo would be enough but it wasn't. Adding a trapezoidal velocity profile made a huge difference. Instead of instantly jumping towards the target, the arm could accelerate, move at a controlled speed, and then decelerate before reaching the target. I also had to account for shorter movements where the arm doesn't have enough distance to reach its maximum velocity. The triangular profile helped a lot with that. That was one of the biggest lessons from the project: getting to the right position is only part of motion control. In robotics, the way something moves can be just as important as where it ends up.
 
 ### Workspace validation should happen before anything moves
 
-The arm itself isn't particularly powerful, but it can still damage its own components.
-
-During testing, I sent it a target that was technically within the mathematical workspace, but reaching it would have required the elbow to rotate to around 175°. The arm tried to move there and started approaching a mechanical limit.
-
-That made it obvious that mathematical reachability isn't the same thing as a safe target.
-
-I added `isWorkspaceValid()` so that every target is checked before any movement is allowed. It was a relatively small change, but it prevented a lot of unnecessary stress on the mechanical parts.
-
-The bigger lesson was simple: don't wait for the hardware to tell you that something is wrong. Validate the command before you execute it.
+The arm itself isn't particularly powerful, but it can still damage its own components. During testing, I sent it a target that was technically within the mathematical workspace, but reaching it would have required the elbow to rotate to around 175°. The arm tried to move there and started approaching a mechanical limit. That made it obvious that mathematical reachability isn't the same thing as a safe target. I added `isWorkspaceValid()` so that every target is checked before any movement is allowed. It was a relatively small change, but it prevented a lot of unnecessary stress on the mechanical parts. The bigger lesson was not to wait for the hardware to tell you that something is wrong. Validate the command before you execute it.
 
 ### What I'd do differently
 
