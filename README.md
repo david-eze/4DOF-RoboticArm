@@ -365,7 +365,6 @@ HOME
 - Compiled firmware is roughly 12KB of flash
 - EEPROM usage is 10 bytes for calibration data
 - Position resolution is limited to about 1° by the servos themselves
-- Expect roughly ±2° repeatability, typical of hobby servo hysteresis
 - Effective workspace coverage is around 90% of the theoretical reach, once you account for singularities near the limits
 
 ## Safety notes
@@ -387,6 +386,65 @@ HOME
 - Tie the grounds together between the Arduino and servo supply
 - Add a fuse or current limiter
 - Check for shorts before powering anything up
+
+## What I Learned
+
+Building this arm taught me a lot more than I expected. I went into it thinking the main challenge would be getting the kinematics and firmware working, but I ended up learning just as much about resource constraints, motion control, safety, debugging, and the small decisions that make the difference between something that technically works and something that actually feels well engineered.
+
+### The 2 KB constraint changes how you think
+
+The ATmega328P only has 2 KB of SRAM, which sounds tiny because it is. You can't just use `String` objects everywhere, allocate memory whenever you need it, or ignore how much space your variables and buffers are taking up.
+
+I had to become much more conscious of what the code was actually doing in memory. Every `float`, buffer and function call mattered. I started using smaller integer types where they made sense and even checked stack usage by placing known values in memory and seeing where they got overwritten.
+
+It forced me to think about programming at a much lower level than I normally would. Instead of assuming the hardware would cope, I had to understand exactly what I was asking it to do. That's probably one of the most useful things this project taught me.
+
+### Inverse kinematics isn't just an academic exercise
+
+Before working on this project, it was easy to see inverse kinematics as something complicated that could be solved by using a library or copying a standard algorithm.
+
+For this arm, though, a geometric solution made much more sense. Because it's a 4-DOF arm running on an Arduino Uno, I could solve the kinematics using the geometry of the arm and the law of cosines without needing a large library or dynamic memory.
+
+Actually deriving the equations myself made a huge difference. I had to work through the triangles, project the target position onto the arm's working plane and think carefully about what each angle actually represented.
+
+I even spent an evening trying to figure out why the arm was pointing in completely the wrong direction, only to realise that I'd mixed up the shoulder and elbow angles. It was a frustrating bug at the time, but honestly, I learned more from fixing it than I would have from simply reading the equations in a textbook.
+
+### Motion profiling made the arm feel completely different
+
+The first version of the arm could move to the right angles, but that didn't mean it moved well.
+
+The servos would start and stop abruptly, the arm would overshoot, and the whole thing looked and sounded much rougher than I wanted. Initially, I assumed that sending a target angle to the servo would be enough. It wasn't.
+
+Adding a trapezoidal velocity profile made a huge difference. Instead of instantly jumping towards the target, the arm could accelerate, move at a controlled speed, and then decelerate before reaching the target.
+
+I also had to account for shorter movements where the arm doesn't have enough distance to reach its maximum velocity. That's where the triangular profile comes in.
+
+That was one of the biggest lessons from the project: getting to the right position is only part of motion control. In robotics, the way something moves can be just as important as where it ends up.
+
+### Workspace validation should happen before anything moves
+
+The arm itself isn't particularly powerful, but it can still damage its own components.
+
+During testing, I sent it a target that was technically within the mathematical workspace, but reaching it would have required the elbow to rotate to around 175°. The arm tried to move there and started approaching a mechanical limit.
+
+That made it obvious that mathematical reachability isn't the same thing as a safe target.
+
+I added `isWorkspaceValid()` so that every target is checked before any movement is allowed. It was a relatively small change, but it prevented a lot of unnecessary stress on the mechanical parts.
+
+The bigger lesson was simple: don't wait for the hardware to tell you that something is wrong. Validate the command before you execute it.
+
+### What I'd do differently
+
+* **Protect the servo power system better.** I lost a servo during early testing after it stalled. A properly sized fuse or resettable protection device would have been a worthwhile addition.
+* **Add error detection to the serial protocol.** The current ASCII protocol works, but a corrupted byte could result in an incorrect command. A CRC or even a basic XOR checksum would make the communication much more reliable.
+* **Build the simulation earlier.** I developed the firmware first and added the Three.js simulation afterwards. If I did it again, I'd probably build the simulation alongside the kinematics and use it to catch mistakes before putting them onto the physical arm.
+* **Document calibration from the beginning.** I knew how the arm needed to be calibrated because I built it, but that wasn't obvious to someone using it for the first time. Things like what "home" means and why `GRIP 0` means closed rather than open should have been documented much earlier.
+
+### The thing I'm most proud of
+
+What I'm most proud of isn't any single feature. It's the fact that the whole system runs on a £3 microcontroller with only 2 KB of RAM while still handling four servos, smooth motion profiles, inverse kinematics, workspace validation and EEPROM-based calibration. The firmware itself isn't particularly large. It's only a few hundred lines, but I had to make almost every part of it count. That experience is probably the biggest takeaway from the project for me. Good engineering isn't always about adding more hardware, more libraries or more code. Sometimes it's about understanding the limitations of what you have and getting as much as possible out of it.
+
+---
 
 ## Ideas for extending this
 
